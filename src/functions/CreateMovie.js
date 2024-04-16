@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions')
 const sql = require('mssql')
 const config = require('../database/config.js')
+const cheerio = require('cheerio')
 
 
 async function streamToString(readableStream) {
@@ -9,6 +10,17 @@ async function streamToString(readableStream) {
         chunks.push(chunk)
 
     return Buffer.concat(chunks).toString('utf-8')
+}
+
+async function searchSoundtrack(title) {
+    const searchQuery = `${title} soundtrack`
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`
+    
+    const response = await fetch(searchUrl)
+    const html = await response.text()
+    const $ = cheerio.load(html)
+
+    return $('a[href^="/url"]').first().attr('href').replace('/url?q=', '').split('&')[0]
 }
 
 app.http('CreateMovie', {
@@ -27,6 +39,8 @@ app.http('CreateMovie', {
             const { title, year, genre, description, director, actors } = movieData
             if (!title || !year || !genre || !description || !director || !actors)
                 return { status: 400, body: "Please provide all required fields: title, year, genre, description, director, actors." }
+            
+            const soundtrack = await searchSoundtrack(title)
 
             await sql.connect(config)
             
@@ -37,7 +51,8 @@ app.http('CreateMovie', {
             sqlRequest.input('description', sql.Text, description)
             sqlRequest.input('director', sql.VarChar(50), director)
             sqlRequest.input('actors', sql.Text, actors)
-            await sqlRequest.query('INSERT INTO Movies (title, year, genre, description, director, actors) VALUES (@title, @year, @genre, @description, @director, @actors)')
+            sqlRequest.input('soundtrack', sql.VarChar(255), soundtrack)
+            await sqlRequest.query('INSERT INTO Movies (title, year, genre, description, director, actors, soundtrack) VALUES (@title, @year, @genre, @description, @director, @actors, @soundtrack)')
 
             await sql.close()
             return { status: 201, body: "Movie record created successfully." }

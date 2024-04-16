@@ -3,7 +3,6 @@ const sql = require('mssql')
 const config = require('../database/config.js')
 
 
-
 app.timer('SetAvgRating', {
     schedule: '0 30 11 * * *',
     handler: async (myTimer, context) => {
